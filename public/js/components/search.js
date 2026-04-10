@@ -1,33 +1,48 @@
-// Função para buscar exercícios na API
+let searchTimeoutId;
+let searchController;
+
 async function searchExercises(query) {
     try {
-        const response = await fetch(`https://libapi.vercel.app/api/exercises/search?lang=pt&query=${query}`);
+        if (searchController) {
+            searchController.abort();
+        }
+
+        searchController = new AbortController();
+        const response = await fetch(`${apiBaseUrl}/api/exercises/search?lang=pt&query=${encodeURIComponent(query)}`, {
+            signal: searchController.signal,
+        });
+
         if (!response.ok) {
             throw new Error(`Erro na API: ${response.statusText}`);
         }
 
         const data = await response.json();
+
         if (data.exercises && data.exercises.length > 0) {
-            // Emite um evento com os resultados da pesquisa
             document.dispatchEvent(new CustomEvent('searchResults', { detail: data.exercises }));
         } else {
             console.warn('Nenhum exercício encontrado para a pesquisa:', query);
             clearSearchResults();
         }
     } catch (error) {
+        if (error.name === 'AbortError') {
+            return;
+        }
+
         console.error('Erro ao buscar exercícios:', error);
         clearSearchResults();
+    } finally {
+        searchController = null;
     }
 }
 
-// Função para limpar os resultados da pesquisa
 function clearSearchResults() {
     document.dispatchEvent(new CustomEvent('clearSearchResults'));
 }
 
-// Função para criar uma barra de pesquisa e colocá-la no placeholder
 function createSearchBar() {
     const searchPlaceholder = document.getElementById('search-placeholder');
+
     if (!searchPlaceholder) {
         console.error('Placeholder da barra de pesquisa não encontrado!');
         return;
@@ -46,21 +61,26 @@ function createSearchBar() {
 
     searchContainer.appendChild(searchInput);
     searchContainer.appendChild(searchIcon);
-
-    // Insere a barra de pesquisa no placeholder
     searchPlaceholder.appendChild(searchContainer);
 
-    // Adiciona o evento de pesquisa
     searchInput.addEventListener('input', (e) => {
         const query = e.target.value.trim().toLowerCase();
-        if (query) {
-            searchExercises(query);
-        } else {
+
+        clearTimeout(searchTimeoutId);
+
+        if (!query) {
+            if (searchController) {
+                searchController.abort();
+            }
+
             clearSearchResults();
-            fetchExercises(0); // Exibe a lista padrão ao limpar a barra de pesquisa
+            return;
         }
+
+        searchTimeoutId = window.setTimeout(() => {
+            searchExercises(query);
+        }, 250);
     });
 }
 
-// Chama a função para criar a barra de pesquisa quando a página carrega
 createSearchBar();
