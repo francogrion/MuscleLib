@@ -1,103 +1,136 @@
 let currentPage = 0;
 const exercisesPerPage = 50;
-let loading = false; // Para prevenir múltiplos carregamentos simultâneos
+let loading = false;
+let isShowingSearchResults = false;
 const apiBaseUrl = 'https://libapi.vercel.app';
+let renderedCardCount = 0;
 
-// Função para buscar exercícios
+const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+            return;
+        }
+
+        entry.target.classList.add('show');
+        revealObserver.unobserve(entry.target);
+    });
+}, {
+    threshold: 0.15,
+});
+
 async function fetchExercises(page = 0, limit = exercisesPerPage) {
     try {
-        loading = true; // Impede múltiplas chamadas simultâneas
+        loading = true;
         const response = await fetch(`${apiBaseUrl}/api/exercises?lang=pt&page=${page}&limit=${limit}`);
-            if (!response.ok) {
-                throw new Error(`Erro na resposta da API: ${response.statusText}`);
-            }
+
+        if (!response.ok) {
+            throw new Error(`Erro na resposta da API: ${response.statusText}`);
+        }
 
         const exercises = await response.json();
-        
+
         if (exercises.length > 0) {
             displayExercises(exercises);
-            currentPage++; // Incrementa a página
+            currentPage++;
         }
-        
-        loading = false; // Libera para próxima chamada
+
+        loading = false;
     } catch (err) {
         console.error('Erro ao buscar exercícios:', err);
-            // alert('Ocorreu um erro ao buscar os exercicíos. Tente novamente mais tarde.');
-        loading = false; // Libera a chamada caso ocorra erro
+        loading = false;
     }
 }
 
-// Função para verificar se o elemento está parcialmente visível na janela de visualização
-function isElementInViewport(el) {
-    const rect = el.getBoundingClientRect();
-    return (
-        rect.top < window.innerHeight * 0.85 && // Se a parte superior estiver 85% visível na tela
-        rect.bottom > 0 // Se a parte inferior ainda não tiver passado da tela
-    );
+function resetExercisesContainer() {
+    const container = document.getElementById('exercises-container');
+
+    if (!container) {
+        return null;
+    }
+
+    container.querySelectorAll('.exercise-card').forEach((card) => {
+        revealObserver.unobserve(card);
+    });
+
+    container.replaceChildren();
+    renderedCardCount = 0;
+
+    return container;
 }
 
-// Função para exibir os exercícios
 function displayExercises(exercises) {
     const container = document.getElementById('exercises-container');
+
+    if (!container) {
+        return;
+    }
 
     exercises.forEach((exercise, index) => {
         const exerciseCard = document.createElement('div');
         exerciseCard.className = 'exercise-card';
 
-        // Verifica se há imagens e usa ambas
         if (exercise.images && exercise.images.length > 0) {
             const img = document.createElement('img');
-            img.src = `${apiBaseUrl}/exercises/${exercise.images[0]}`; // Usa a primeira imagem inicialmente
+            const primaryImage = `${apiBaseUrl}/${exercise.images[0]}`;
+            const secondaryImage = exercise.images[1] ? `${apiBaseUrl}/${exercise.images[1]}` : null;
+
+            img.src = primaryImage;
             img.alt = exercise.name;
+            img.loading = 'lazy';
+            img.decoding = 'async';
             exerciseCard.appendChild(img);
 
-            // Alternar imagens
-            let currentIndex = 0;
-            setInterval(() => {
-                currentIndex = (currentIndex + 1) % exercise.images.length;
-                img.src = `${apiBaseUrl}/exercises/${exercise.images[currentIndex]}`; // Atualiza a imagem
-            }, 1500); // Muda a imagem a cada 1,5 segundo (1500 milissegundos)
+            if (secondaryImage) {
+                const showSecondaryImage = () => {
+                    img.src = secondaryImage;
+                };
+
+                const showPrimaryImage = () => {
+                    img.src = primaryImage;
+                };
+
+                exerciseCard.addEventListener('mouseenter', showSecondaryImage);
+                exerciseCard.addEventListener('mouseleave', showPrimaryImage);
+                exerciseCard.addEventListener('focusin', showSecondaryImage);
+                exerciseCard.addEventListener('focusout', showPrimaryImage);
+            }
         }
 
-        // Adiciona o nome do exercício
         const name = document.createElement('h3');
         name.textContent = exercise.name;
         exerciseCard.appendChild(name);
 
-        // Adiciona o nível e categoria
         const details = document.createElement('p');
         details.textContent = `Nível: ${exercise.level} | Categoria: ${exercise.category}`;
         exerciseCard.appendChild(details);
 
-        // Adiciona a força
         const force = document.createElement('p');
         force.textContent = `Força: ${exercise.force}`;
         exerciseCard.appendChild(force);
 
-        // Adiciona o equipamento (se houver)
         const equipment = document.createElement('p');
         equipment.textContent = `Equipamento: ${exercise.equipment || 'Nenhum'}`;
         exerciseCard.appendChild(equipment);
 
-        // Adiciona os músculos principais
         const primaryMuscles = document.createElement('p');
         primaryMuscles.textContent = `Músculo Principal: ${exercise.primaryMuscles.join(', ')}`;
         exerciseCard.appendChild(primaryMuscles);
 
-        // Adiciona os músculos secundários (se houver)
         const secondaryMuscles = document.createElement('p');
-        secondaryMuscles.textContent = `Músculos Secundários: ${exercise.secondaryMuscles && Array.isArray(exercise.secondaryMuscles) && exercise.secondaryMuscles.length > 0 ? exercise.secondaryMuscles.join(', ') : 'Nenhum'}`;
+        secondaryMuscles.textContent = `Músculos Secundários: ${exercise.secondaryMuscles && Array.isArray(exercise.secondaryMuscles) && exercise.secondaryMuscles.length > 0
+            ? exercise.secondaryMuscles.join(', ')
+            : 'Nenhum'
+            }`;
         exerciseCard.appendChild(secondaryMuscles);
 
-        // Adiciona as instruções em um colapso
-        const collapseId = `collapseInstructions-${index}`;
+        const collapseId = `collapseInstructions-${renderedCardCount + index}`;
 
         const collapseButton = document.createElement('button');
         collapseButton.className = 'collapse-btn btn btn-primary collapse-toggle d-flex justify-content-between align-items-center';
         collapseButton.type = 'button';
         collapseButton.setAttribute('data-bs-toggle', 'collapse');
         collapseButton.setAttribute('data-bs-target', `#${collapseId}`);
-        collapseButton.innerHTML = `Mostrar Instruções <i class="collapse-icon fas fa-plus"></i>`; // Ícone do Font Awesome
+        collapseButton.innerHTML = 'Mostrar Instruções <i class="collapse-icon fas fa-plus"></i>';
         exerciseCard.appendChild(collapseButton);
 
         const collapseDiv = document.createElement('div');
@@ -108,7 +141,7 @@ function displayExercises(exercises) {
         instructions.className = 'card card-body';
 
         if (exercise.instructions && Array.isArray(exercise.instructions)) {
-            exercise.instructions.forEach(step => {
+            exercise.instructions.forEach((step) => {
                 const p = document.createElement('p');
                 p.textContent = step;
                 instructions.appendChild(p);
@@ -118,68 +151,50 @@ function displayExercises(exercises) {
         collapseDiv.appendChild(instructions);
         exerciseCard.appendChild(collapseDiv);
 
-        // Função para alternar ícone de + para x
         collapseButton.addEventListener('click', () => {
             const icon = collapseButton.querySelector('.collapse-icon');
+
             if (collapseDiv.classList.contains('show')) {
-                icon.classList.replace('fa-minus', 'fa-plus'); // Alterna para o ícone de +
+                icon.classList.replace('fa-minus', 'fa-plus');
             } else {
-                icon.classList.replace('fa-plus', 'fa-minus'); // Alterna para o ícone de x
+                icon.classList.replace('fa-plus', 'fa-minus');
             }
         });
 
-        // Evento do Bootstrap para detectar quando o colapso abrir ou fechar
         collapseDiv.addEventListener('shown.bs.collapse', () => {
             const icon = collapseButton.querySelector('.collapse-icon');
-            icon.classList.replace('fa-plus', 'fa-minus'); // Ícone de colapso aberto
+            icon.classList.replace('fa-plus', 'fa-minus');
         });
 
         collapseDiv.addEventListener('hidden.bs.collapse', () => {
             const icon = collapseButton.querySelector('.collapse-icon');
-            icon.classList.replace('fa-minus', 'fa-plus'); // Ícone de colapso fechado
+            icon.classList.replace('fa-minus', 'fa-plus');
         });
 
-
-        // Adiciona o card ao container
         container.appendChild(exerciseCard);
-           
-
-        // Função para revelar o card quando ele entra parcialmente na visualização
-        function reveal() {
-            if (isElementInViewport(exerciseCard)) {
-                exerciseCard.classList.add('show');
-            }
-        }
-
-        // Verifica se o card está visível no carregamento
-        reveal();
-
-        // Adiciona um event listener para rolar
-        window.addEventListener('scroll', reveal);
+        revealObserver.observe(exerciseCard);
     });
+
+    renderedCardCount += exercises.length;
 }
 
-// Função para carregar mais exercícios conforme a rolagem
 window.addEventListener('scroll', () => {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 && !loading) {
-        fetchExercises(currentPage); // Carrega a próxima página
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 && !loading && !isShowingSearchResults) {
+        fetchExercises(currentPage);
     }
 });
 
 document.addEventListener('searchResults', (e) => {
-    const exercises = e.detail; // Exercícios retornados
-    const container = document.getElementById('exercises-container');
-    container.innerHTML = ''; // Limpa os exercícios atuais para exibir os resultados da pesquisa
-    displayExercises(exercises);
+    isShowingSearchResults = true;
+    resetExercisesContainer();
+    displayExercises(e.detail);
 });
 
 document.addEventListener('clearSearchResults', () => {
-    const container = document.getElementById('exercises-container');
-    container.innerHTML = ''; // Limpa os resultados da pesquisa
-    currentPage = 0; // Reseta a paginação para a primeira página
-    fetchExercises(0); // Carrega os exercícios da primeira página
+    isShowingSearchResults = false;
+    resetExercisesContainer();
+    currentPage = 0;
+    fetchExercises(0);
 });
 
-
-// Carrega a primeira página de exercícios ao carregar o site
 fetchExercises();
