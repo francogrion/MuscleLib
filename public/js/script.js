@@ -71,8 +71,8 @@ function displayExercises(exercises) {
 
         if (exercise.images && exercise.images.length > 0) {
             const img = document.createElement('img');
-            const primaryImage = `${apiBaseUrl}/${exercise.images[0]}`;
-            const secondaryImage = exercise.images[1] ? `${apiBaseUrl}/${exercise.images[1]}` : null;
+            const primaryImage = `${apiBaseUrl}/exercises/${exercise.images[0]}`;
+            const secondaryImage = exercise.images[1] ? `${apiBaseUrl}/exercises/${exercise.images[1]}` : null;
 
             img.src = primaryImage;
             img.alt = exercise.name;

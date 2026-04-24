@@ -180,7 +180,8 @@ function createScriptEnvironment() {
                 ok: true,
                 json: () => Promise.resolve([{
                     name: 'Push Up',
-                    images: ['exercises/push-up/0.jpg', 'exercises/push-up/1.jpg'],
+                    id: 'Push_Up',
+                    images: ['Push_Up/0.jpg', 'Push_Up/1.jpg'],
                     level: 'beginner',
                     category: 'strength',
                     force: 'push',
@@ -360,7 +361,7 @@ async function main() {
         const card = env.exercisesContainer.children[0];
         const image = card.children[0];
 
-        assert.equal(image.src, 'https://libapi.vercel.app/exercises/push-up/0.jpg');
+        assert.equal(image.src, 'https://libapi.vercel.app/exercises/Push_Up/0.jpg');
         assert.equal(image.loading, 'lazy');
         assert.equal(env.observerInstances[0].observed.length, 1);
     });
