@@ -173,7 +173,9 @@ function formatOptionLabel(value) {
 
   return value
     .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function normalizeLocalizedValue(value, language = currentLanguage) {
