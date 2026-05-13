@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Biblioteca de Exercícios</title>
+    <title>Biblioteca de Exercicios</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="/css/responsive.css">
@@ -11,9 +11,74 @@
 </head>
 <body>
 
-    <div id="exercises-container"><!-- Aqui os exercícios serão carregados via JavaScript --></div>
-    <div id="loading-indicator" style="display: none;">Carregando mais exercícios...</div>
-        <!-- Botão de subir ao topo -->
+    <main class="app-shell">
+        <section class="controls-panel" aria-label="Exercise filters">
+            <div class="controls-header">
+                <div>
+                    <p class="controls-kicker" data-i18n="controlsKicker">Biblioteca</p>
+                    <h1 data-i18n="controlsTitle">Exercicios</h1>
+                </div>
+                <div class="language-control">
+                    <label for="language-select" data-i18n="languageLabel">Idioma</label>
+                    <select id="language-select" class="filter-select" aria-label="Selecionar idioma">
+                        <option value="pt">Portugues</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="filter-grid" aria-label="Opcoes de filtro">
+                <label class="filter-field">
+                    <span data-i18n="muscleLabel">Musculo</span>
+                    <select id="filter-primaryMuscles" class="filter-select" data-filter="primaryMuscles">
+                        <option value="" data-i18n="allMuscles">Todos os musculos</option>
+                    </select>
+                </label>
+                <label class="filter-field">
+                    <span data-i18n="difficultyLabel">Dificuldade</span>
+                    <select id="filter-level" class="filter-select" data-filter="level">
+                        <option value="" data-i18n="allDifficulties">Todas as dificuldades</option>
+                    </select>
+                </label>
+                <label class="filter-field">
+                    <span data-i18n="equipmentLabel">Equipamento</span>
+                    <select id="filter-equipment" class="filter-select" data-filter="equipment">
+                        <option value="" data-i18n="allEquipment">Todos os equipamentos</option>
+                    </select>
+                </label>
+                <label class="filter-field">
+                    <span data-i18n="categoryLabel">Categoria</span>
+                    <select id="filter-category" class="filter-select" data-filter="category">
+                        <option value="" data-i18n="allCategories">Todas as categorias</option>
+                    </select>
+                </label>
+                <label class="filter-field">
+                    <span data-i18n="forceLabel">Forca</span>
+                    <select id="filter-force" class="filter-select" data-filter="force">
+                        <option value="" data-i18n="allForces">Todas as forcas</option>
+                    </select>
+                </label>
+                <label class="filter-field">
+                    <span data-i18n="secondaryMuscleLabel">Musculo secundario</span>
+                    <select id="filter-secondaryMuscles" class="filter-select" data-filter="secondaryMuscles">
+                        <option value="" data-i18n="allSecondaryMuscles">Todos os secundarios</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="filter-actions">
+                <button id="clear-filters" class="btn btn-outline-secondary" type="button">
+                    <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                    <span data-i18n="clearFilters">Limpar filtros</span>
+                </button>
+                <p id="filter-status" class="filter-status" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <div id="exercises-container"><!-- Aqui os exercicios serao carregados via JavaScript --></div>
+        <div id="loading-indicator" style="display: none;">Carregando mais exercicios...</div>
+    </main>
+
     <div id="backToTop" class="back-to-top">
       <i class="fas fa-arrow-up"></i>
     </div>
