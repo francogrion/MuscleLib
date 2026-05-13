@@ -4,6 +4,85 @@ let loading = false;
 let isShowingSearchResults = false;
 const apiBaseUrl = 'https://libapi.vercel.app';
 let renderedCardCount = 0;
+let filterOptionsRequestId = 0;
+const storedLanguage =
+  typeof localStorage !== "undefined"
+    ? localStorage.getItem("musclelib-language")
+    : null;
+let currentLanguage = storedLanguage || "pt";
+const activeFilters = {
+  primaryMuscles: "",
+  secondaryMuscles: "",
+  level: "",
+  force: "",
+  equipment: "",
+  category: "",
+};
+
+const filterFields = Object.keys(activeFilters);
+
+const uiText = {
+  pt: {
+    controlsKicker: "Biblioteca",
+    controlsTitle: "Exercicios",
+    languageLabel: "Idioma",
+    muscleLabel: "Musculo",
+    secondaryMuscleLabel: "Musculo secundario",
+    difficultyLabel: "Dificuldade",
+    equipmentLabel: "Equipamento",
+    categoryLabel: "Categoria",
+    forceLabel: "Forca",
+    allMuscles: "Todos os musculos",
+    allSecondaryMuscles: "Todos os secundarios",
+    allDifficulties: "Todas as dificuldades",
+    allEquipment: "Todos os equipamentos",
+    allCategories: "Todas as categorias",
+    allForces: "Todas as forcas",
+    clearFilters: "Limpar filtros",
+    loadingMore: "Carregando mais exercicios...",
+    loadingOptions: "Carregando filtros...",
+    noResults: "Nenhum exercicio encontrado com estes filtros.",
+    activeFilters: "Filtros ativos",
+    level: "Nivel",
+    category: "Categoria",
+    force: "Forca",
+    equipment: "Equipamento",
+    primaryMuscles: "Musculo principal",
+    secondaryMuscles: "Musculos secundarios",
+    none: "Nenhum",
+    showInstructions: "Mostrar instrucoes",
+  },
+  en: {
+    controlsKicker: "Library",
+    controlsTitle: "Exercises",
+    languageLabel: "Language",
+    muscleLabel: "Muscle",
+    secondaryMuscleLabel: "Secondary muscle",
+    difficultyLabel: "Difficulty",
+    equipmentLabel: "Equipment",
+    categoryLabel: "Category",
+    forceLabel: "Force",
+    allMuscles: "All muscles",
+    allSecondaryMuscles: "All secondary muscles",
+    allDifficulties: "All difficulties",
+    allEquipment: "All equipment",
+    allCategories: "All categories",
+    allForces: "All forces",
+    clearFilters: "Clear filters",
+    loadingMore: "Loading more exercises...",
+    loadingOptions: "Loading filters...",
+    noResults: "No exercises found with these filters.",
+    activeFilters: "Active filters",
+    level: "Level",
+    category: "Category",
+    force: "Force",
+    equipment: "Equipment",
+    primaryMuscles: "Primary muscle",
+    secondaryMuscles: "Secondary muscles",
+    none: "None",
+    showInstructions: "Show instructions",
+  },
+};
 
 const revealObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
@@ -18,10 +97,186 @@ const revealObserver = new IntersectionObserver((entries) => {
     threshold: 0.15,
 });
 
+function getCurrentLanguage() {
+  return currentLanguage;
+}
+
+function getActiveFilters() {
+  return { ...activeFilters };
+}
+
+function getText(key, language = currentLanguage) {
+  return uiText[language][key] || uiText.en[key] || key;
+}
+
+function buildQueryString(params) {
+  return Object.entries(params)
+    .filter(
+      ([, value]) => value !== undefined && value !== null && value !== "",
+    )
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+    )
+    .join("&");
+}
+
+function buildExerciseUrl(page = 0, limit = exercisesPerPage) {
+  const params = {
+    lang: currentLanguage,
+    page,
+    limit,
+  };
+
+  filterFields.forEach((field) => {
+    if (activeFilters[field]) {
+      params[field] = activeFilters[field];
+    }
+  });
+
+  return `${apiBaseUrl}/api/exercises?${buildQueryString(params)}`;
+}
+
+function updateLoadingText() {
+  const loadingIndicator = document.getElementById("loading-indicator");
+
+  if (loadingIndicator) {
+    loadingIndicator.textContent = getText("loadingMore");
+  }
+}
+
+function updateFilterStatus() {
+  const status = document.getElementById("filter-status");
+
+  if (!status) {
+    return;
+  }
+
+  const count = filterFields.filter((field) => activeFilters[field]).length;
+  status.textContent = count > 0 ? `${getText("activeFilters")}: ${count}` : "";
+}
+
+function translateStaticUi() {
+  document.documentElement.lang = currentLanguage === "pt" ? "pt-br" : "en";
+  document.querySelectorAll("[data-i18n]").forEach((element) => {
+    const key = element.getAttribute("data-i18n");
+    element.textContent = getText(key);
+  });
+  updateLoadingText();
+  updateFilterStatus();
+}
+
+function formatOptionLabel(value) {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeLocalizedValue(value, language = currentLanguage) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value[language] || value.en || value.pt || "";
+  }
+
+  return value;
+}
+
+function populateFilterSelect(field, values) {
+  const select = document.querySelector(`[data-filter="${field}"]`);
+
+  if (!select) {
+    return;
+  }
+
+  const selectedValue = activeFilters[field];
+  const firstOption = select.querySelector('option[value=""]');
+  select.replaceChildren(firstOption);
+
+  values.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = formatOptionLabel(value);
+    select.appendChild(option);
+  });
+
+  select.value = values.includes(selectedValue) ? selectedValue : "";
+  activeFilters[field] = select.value;
+}
+
+function clearFilterOptions() {
+  filterFields.forEach((field) => {
+    const select = document.querySelector(`[data-filter="${field}"]`);
+
+    if (!select) {
+      return;
+    }
+
+    const firstOption = select.querySelector('option[value=""]');
+
+    if (firstOption) {
+      select.replaceChildren(firstOption);
+    }
+
+    select.value = "";
+    activeFilters[field] = "";
+  });
+}
+
+async function loadFilterOptions() {
+  const requestId = ++filterOptionsRequestId;
+  const language = currentLanguage;
+  const status = document.getElementById("filter-status");
+
+  if (status) {
+    status.textContent = getText("loadingOptions", language);
+  }
+
+  try {
+    const params = {
+      lang: language,
+    };
+    const response = await fetch(
+      `${apiBaseUrl}/api/exercises/filters?${buildQueryString(params)}`,
+    );
+
+    if (!response.ok) {
+      throw new Error(`Erro na resposta da API: ${response.statusText}`);
+    }
+
+    const filterOptions = await response.json();
+
+    if (requestId !== filterOptionsRequestId || language !== currentLanguage) {
+      return;
+    }
+
+    filterFields.forEach((field) =>
+      populateFilterSelect(field, filterOptions[field] || []),
+    );
+  } catch (err) {
+    console.error("Erro ao carregar filtros:", err);
+  } finally {
+    if (requestId === filterOptionsRequestId && language === currentLanguage) {
+      updateFilterStatus();
+    }
+  }
+}
+
 async function fetchExercises(page = 0, limit = exercisesPerPage) {
     try {
         loading = true;
-        const response = await fetch(`${apiBaseUrl}/api/exercises?lang=pt&page=${page}&limit=${limit}`);
+        const response = await fetch(buildExerciseUrl(page, limit));
+
+        if (response.status === 404) {
+          if (page === 0) {
+            showEmptyState();
+          }
+
+          loading = false;
+          return;
+        }
 
         if (!response.ok) {
             throw new Error(`Erro na resposta da API: ${response.statusText}`);
@@ -30,13 +285,15 @@ async function fetchExercises(page = 0, limit = exercisesPerPage) {
         const exercises = await response.json();
 
         if (exercises.length > 0) {
-            displayExercises(exercises);
-            currentPage++;
+          displayExercises(exercises);
+          currentPage++;
+        } else if (page === 0) {
+          showEmptyState();
         }
 
         loading = false;
     } catch (err) {
-        console.error('Erro ao buscar exercícios:', err);
+        console.error("Erro ao buscar exercicios:", err);
         loading = false;
     }
 }
@@ -58,6 +315,48 @@ function resetExercisesContainer() {
     return container;
 }
 
+function showEmptyState() {
+  const container = resetExercisesContainer();
+
+  if (!container) {
+    return;
+  }
+
+  const emptyState = document.createElement("p");
+  emptyState.className = "empty-state";
+  emptyState.textContent = getText("noResults");
+  container.appendChild(emptyState);
+}
+
+function formatList(value) {
+  const normalizedValue = normalizeLocalizedValue(value);
+
+  return Array.isArray(normalizedValue) && normalizedValue.length > 0
+    ? normalizedValue.map(normalizeLocalizedValue).join(", ")
+    : getText("none");
+}
+
+function matchesActiveFilters(exercise) {
+  return filterFields.every((field) => {
+    if (!activeFilters[field]) {
+      return true;
+    }
+
+    const value = normalizeLocalizedValue(exercise[field]);
+
+    if (Array.isArray(value)) {
+      return value.some(
+        (item) => item.toLowerCase() === activeFilters[field].toLowerCase(),
+      );
+    }
+
+    return (
+      typeof value === "string" &&
+      value.toLowerCase() === activeFilters[field].toLowerCase()
+    );
+  });
+}
+
 function displayExercises(exercises) {
     const container = document.getElementById('exercises-container');
 
@@ -75,7 +374,7 @@ function displayExercises(exercises) {
             const secondaryImage = exercise.images[1] ? `${apiBaseUrl}/exercises/${exercise.images[1]}` : null;
 
             img.src = primaryImage;
-            img.alt = exercise.name;
+            img.alt = normalizeLocalizedValue(exercise.name);
             img.loading = 'lazy';
             img.decoding = 'async';
             exerciseCard.appendChild(img);
@@ -97,30 +396,27 @@ function displayExercises(exercises) {
         }
 
         const name = document.createElement('h3');
-        name.textContent = exercise.name;
+        name.textContent = normalizeLocalizedValue(exercise.name);
         exerciseCard.appendChild(name);
 
         const details = document.createElement('p');
-        details.textContent = `Nível: ${exercise.level} | Categoria: ${exercise.category}`;
+        details.textContent = `${getText("level")}: ${normalizeLocalizedValue(exercise.level) || getText("none")} | ${getText("category")}: ${normalizeLocalizedValue(exercise.category) || getText("none")}`;
         exerciseCard.appendChild(details);
 
         const force = document.createElement('p');
-        force.textContent = `Força: ${exercise.force}`;
+        force.textContent = `${getText("force")}: ${normalizeLocalizedValue(exercise.force) || getText("none")}`;
         exerciseCard.appendChild(force);
 
         const equipment = document.createElement('p');
-        equipment.textContent = `Equipamento: ${exercise.equipment || 'Nenhum'}`;
+        equipment.textContent = `${getText("equipment")}: ${normalizeLocalizedValue(exercise.equipment) || getText("none")}`;
         exerciseCard.appendChild(equipment);
 
         const primaryMuscles = document.createElement('p');
-        primaryMuscles.textContent = `Músculo Principal: ${exercise.primaryMuscles.join(', ')}`;
+        primaryMuscles.textContent = `${getText("primaryMuscles")}: ${formatList(exercise.primaryMuscles)}`;
         exerciseCard.appendChild(primaryMuscles);
 
         const secondaryMuscles = document.createElement('p');
-        secondaryMuscles.textContent = `Músculos Secundários: ${exercise.secondaryMuscles && Array.isArray(exercise.secondaryMuscles) && exercise.secondaryMuscles.length > 0
-            ? exercise.secondaryMuscles.join(', ')
-            : 'Nenhum'
-            }`;
+        secondaryMuscles.textContent = `${getText("secondaryMuscles")}: ${formatList(exercise.secondaryMuscles)}`;
         exerciseCard.appendChild(secondaryMuscles);
 
         const collapseId = `collapseInstructions-${renderedCardCount + index}`;
@@ -130,7 +426,7 @@ function displayExercises(exercises) {
         collapseButton.type = 'button';
         collapseButton.setAttribute('data-bs-toggle', 'collapse');
         collapseButton.setAttribute('data-bs-target', `#${collapseId}`);
-        collapseButton.innerHTML = 'Mostrar Instruções <i class="collapse-icon fas fa-plus"></i>';
+        collapseButton.innerHTML = `${getText("showInstructions")} <i class="collapse-icon fas fa-plus"></i>`;
         exerciseCard.appendChild(collapseButton);
 
         const collapseDiv = document.createElement('div');
@@ -178,6 +474,64 @@ function displayExercises(exercises) {
     renderedCardCount += exercises.length;
 }
 
+function reloadExercises() {
+  isShowingSearchResults = false;
+  resetExercisesContainer();
+  currentPage = 0;
+  fetchExercises(0);
+}
+
+function initFilterControls() {
+  const languageSelect = document.getElementById("language-select");
+
+  if (!languageSelect) {
+    return;
+  }
+
+  languageSelect.value = currentLanguage;
+  translateStaticUi();
+  loadFilterOptions();
+
+  languageSelect.addEventListener("change", () => {
+    currentLanguage = languageSelect.value;
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("musclelib-language", currentLanguage);
+    }
+    clearFilterOptions();
+    translateStaticUi();
+    loadFilterOptions();
+    document.dispatchEvent(
+      new CustomEvent("languageChanged", { detail: currentLanguage }),
+    );
+    reloadExercises();
+  });
+
+  document.querySelectorAll("[data-filter]").forEach((select) => {
+    select.addEventListener("change", () => {
+      activeFilters[select.dataset.filter] = select.value;
+      updateFilterStatus();
+      reloadExercises();
+    });
+  });
+
+  const clearButton = document.getElementById("clear-filters");
+
+  if (clearButton) {
+    clearButton.addEventListener("click", () => {
+      filterFields.forEach((field) => {
+        activeFilters[field] = "";
+        const select = document.querySelector(`[data-filter="${field}"]`);
+
+        if (select) {
+          select.value = "";
+        }
+      });
+      updateFilterStatus();
+      reloadExercises();
+    });
+  }
+}
+
 window.addEventListener('scroll', () => {
     if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 && !loading && !isShowingSearchResults) {
         fetchExercises(currentPage);
@@ -187,14 +541,19 @@ window.addEventListener('scroll', () => {
 document.addEventListener('searchResults', (e) => {
     isShowingSearchResults = true;
     resetExercisesContainer();
-    displayExercises(e.detail);
+
+    const filteredResults = e.detail.filter(matchesActiveFilters);
+
+    if (filteredResults.length > 0) {
+      displayExercises(filteredResults);
+    } else {
+      showEmptyState();
+    }
 });
 
 document.addEventListener('clearSearchResults', () => {
-    isShowingSearchResults = false;
-    resetExercisesContainer();
-    currentPage = 0;
-    fetchExercises(0);
+    reloadExercises();
 });
 
+initFilterControls();
 fetchExercises();

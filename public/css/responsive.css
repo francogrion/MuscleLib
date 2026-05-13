@@ -1,5 +1,32 @@
 /* Estilos para smartphones */
 @media (max-width: 600px) {
+    body {
+        padding-top: 9rem;
+    }
+
+    .app-shell {
+        width: min(100% - 20px, 1180px);
+    }
+
+    .controls-panel {
+        margin: 0 0 14px;
+        padding: 14px;
+    }
+
+    .controls-header,
+    .filter-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .language-control {
+        min-width: 0;
+    }
+
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+
     .navbar {
         padding: 10px 15px;
         display: flex;
@@ -34,6 +61,10 @@
 
 /* Estilos para tablets */
 @media (min-width: 601px) and (max-width: 900px) {
+    .filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .navbar {
         padding: 15px 20px;
     }

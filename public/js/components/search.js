@@ -8,7 +8,8 @@ async function searchExercises(query) {
         }
 
         searchController = new AbortController();
-        const response = await fetch(`${apiBaseUrl}/api/exercises/search?lang=pt&query=${encodeURIComponent(query)}`, {
+        const language = typeof getCurrentLanguage === 'function' ? getCurrentLanguage() : 'pt';
+        const response = await fetch(`${apiBaseUrl}/api/exercises/search?lang=${language}&query=${encodeURIComponent(query)}`, {
             signal: searchController.signal,
         });
 
@@ -80,6 +81,10 @@ function createSearchBar() {
         searchTimeoutId = window.setTimeout(() => {
             searchExercises(query);
         }, 250);
+    });
+
+    document.addEventListener('languageChanged', () => {
+        searchInput.value = '';
     });
 }
 
