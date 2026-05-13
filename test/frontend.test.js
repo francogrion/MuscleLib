@@ -223,7 +223,7 @@ function createScriptEnvironment() {
     };
 }
 
-function createSearchEnvironment({ keepFetchPending = false } = {}) {
+function createSearchEnvironment({ keepFetchPending = false, emptyResults = false, errorResponse = false } = {}) {
     const timerController = createTimerController();
     const fetchCalls = [];
     const dispatchedEvents = [];
@@ -286,10 +286,17 @@ function createSearchEnvironment({ keepFetchPending = false } = {}) {
                 });
             }
 
+            if (errorResponse) {
+                return Promise.resolve({
+                    ok: false,
+                    statusText: 'Internal Server Error',
+                });
+            }
+
             return Promise.resolve({
                 ok: true,
                 json: () => Promise.resolve({
-                    exercises: [{ name: 'Push Up' }],
+                    exercises: emptyResults ? [] : [{ name: 'Push Up' }],
                 }),
             });
         },
@@ -445,6 +452,71 @@ async function main() {
 
         env.resolvePendingFetch();
         await flushPromises();
+    });
+
+    await runTest('search.js dispatches clearSearchResults when API returns empty exercises', async () => {
+        const env = createSearchEnvironment({ emptyResults: true });
+
+        loadScript(path.join('public', 'js', 'components', 'search.js'), env.context);
+
+        const searchContainer = env.placeholder.children[0];
+        const input = searchContainer.children[0];
+
+        input.dispatchEvent({ type: 'input', target: { value: 'xyz' } });
+        env.timerController.runAll();
+        await flushPromises();
+
+        assert.equal(env.fetchCalls.length, 1);
+        assert.equal(env.dispatchedEvents.at(-1).type, 'clearSearchResults');
+        assert.ok(!env.dispatchedEvents.some((e) => e.type === 'searchResults'));
+    });
+
+    await runTest('search.js dispatches clearSearchResults when API response is not ok', async () => {
+        const env = createSearchEnvironment({ errorResponse: true });
+
+        loadScript(path.join('public', 'js', 'components', 'search.js'), env.context);
+
+        const searchContainer = env.placeholder.children[0];
+        const input = searchContainer.children[0];
+
+        input.dispatchEvent({ type: 'input', target: { value: 'push' } });
+        env.timerController.runAll();
+        await flushPromises();
+
+        assert.equal(env.fetchCalls.length, 1);
+        assert.equal(env.dispatchedEvents.at(-1).type, 'clearSearchResults');
+        assert.ok(!env.dispatchedEvents.some((e) => e.type === 'searchResults'));
+    });
+
+    await runTest('search.js treats whitespace-only input as empty and clears without fetching', async () => {
+        const env = createSearchEnvironment();
+
+        loadScript(path.join('public', 'js', 'components', 'search.js'), env.context);
+
+        const searchContainer = env.placeholder.children[0];
+        const input = searchContainer.children[0];
+
+        input.dispatchEvent({ type: 'input', target: { value: '   ' } });
+
+        assert.equal(env.fetchCalls.length, 0);
+        assert.equal(env.timerController.count(), 0);
+        assert.equal(env.dispatchedEvents.at(-1).type, 'clearSearchResults');
+    });
+
+    await runTest('search.js lowercases the query before sending to the API', async () => {
+        const env = createSearchEnvironment();
+
+        loadScript(path.join('public', 'js', 'components', 'search.js'), env.context);
+
+        const searchContainer = env.placeholder.children[0];
+        const input = searchContainer.children[0];
+
+        input.dispatchEvent({ type: 'input', target: { value: 'PUSH UP' } });
+        env.timerController.runAll();
+        await flushPromises();
+
+        assert.equal(env.fetchCalls.length, 1);
+        assert.match(env.fetchCalls[0].url, /query=push%20up/);
     });
 }
 
