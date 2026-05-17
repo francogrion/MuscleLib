@@ -1,6 +1,16 @@
+const LOGO_LIGHT = 'https://cdn.shardcloud.app/4d7d8031-4b99-4759-afbc-1e01575b29d6/musclelib_logo.png';
+const LOGO_DARK = 'https://n519x3fvhoado5zf.public.blob.vercel-storage.com/avatars/69651f2b148c75323c2a9c7e/1769382801270.svg';
+
 document.addEventListener('DOMContentLoaded', () => {
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
+
+    function updateLogo(theme) {
+        const logoImg = document.getElementById('logo-img');
+        if (logoImg) {
+            logoImg.src = theme === 'light-mode' ? LOGO_LIGHT : LOGO_DARK;
+        }
+    }
 
     // Função para alternar entre ícones de sol e lua
     function updateIcon(theme) {
@@ -18,11 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedTheme) {
         document.body.classList.add(savedTheme);
         updateIcon(savedTheme);
+        updateLogo(savedTheme);
     } else {
         // Verifica o tema preferido do sistema (escuro ou claro)
         const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark-mode' : 'light-mode';
         document.body.classList.add(systemTheme);
         updateIcon(systemTheme);
+        updateLogo(systemTheme);
     }
 
     // Evento para alternar o tema ao clicar no botão
@@ -41,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Atualiza o ícone com base no tema
         updateIcon(currentTheme);
+        updateLogo(currentTheme);
 
         // Remove a classe de rotação após a animação (500ms)
         setTimeout(() => {

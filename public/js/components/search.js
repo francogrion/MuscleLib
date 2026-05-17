@@ -22,7 +22,7 @@ async function searchExercises(query) {
         if (data.exercises && data.exercises.length > 0) {
             document.dispatchEvent(new CustomEvent('searchResults', { detail: data.exercises }));
         } else {
-            console.warn('Nenhum exercício encontrado para a pesquisa:', query);
+            console.warn('Nenhum exercicio encontrado para a pesquisa:', query);
             clearSearchResults();
         }
     } catch (error) {
@@ -30,7 +30,7 @@ async function searchExercises(query) {
             return;
         }
 
-        console.error('Erro ao buscar exercícios:', error);
+        console.error('Erro ao buscar exercicios:', error);
         clearSearchResults();
     } finally {
         searchController = null;
@@ -45,7 +45,7 @@ function createSearchBar() {
     const searchPlaceholder = document.getElementById('search-placeholder');
 
     if (!searchPlaceholder) {
-        console.error('Placeholder da barra de pesquisa não encontrado!');
+        console.error('Placeholder da barra de pesquisa nao encontrado!');
         return;
     }
 
@@ -54,15 +54,35 @@ function createSearchBar() {
 
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
-    searchInput.placeholder = 'Pesquisar exercícios...';
+    searchInput.placeholder = 'Pesquisar exercicios...';
     searchInput.className = 'search-input';
 
-    const searchIcon = document.createElement('i');
-    searchIcon.className = 'fas fa-search search-icon';
+    const searchButton = document.createElement('button');
+    searchButton.type = 'button';
+    searchButton.className = 'search-icon';
+    searchButton.setAttribute('aria-label', 'Pesquisar');
+    searchButton.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i>';
 
     searchContainer.appendChild(searchInput);
-    searchContainer.appendChild(searchIcon);
+    searchContainer.appendChild(searchButton);
     searchPlaceholder.appendChild(searchContainer);
+
+    const expandSearch = () => {
+        searchPlaceholder.classList.add('is-search-expanded');
+        searchContainer.classList.add('is-expanded');
+        searchInput.focus();
+    };
+
+    const collapseSearch = () => {
+        if (!searchInput.value.trim()) {
+            searchPlaceholder.classList.remove('is-search-expanded');
+            searchContainer.classList.remove('is-expanded');
+        }
+    };
+
+    searchButton.addEventListener('click', expandSearch);
+    searchInput.addEventListener('focus', expandSearch);
+    searchInput.addEventListener('blur', collapseSearch);
 
     searchInput.addEventListener('input', (e) => {
         const query = e.target.value.trim().toLowerCase();
@@ -85,6 +105,7 @@ function createSearchBar() {
 
     document.addEventListener('languageChanged', () => {
         searchInput.value = '';
+        collapseSearch();
     });
 }
 

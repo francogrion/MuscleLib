@@ -1,10 +1,50 @@
 let currentPage = 0;
 const exercisesPerPage = 50;
 let loading = false;
+let hasMoreExercises = true;
 let isShowingSearchResults = false;
-const apiBaseUrl = 'https://libapi.vercel.app';
+const currentHostname =
+  typeof window !== "undefined" && window.location
+    ? window.location.hostname
+    : "";
+const apiBaseUrl =
+  currentHostname === "localhost" ||
+  currentHostname === "127.0.0.1" ||
+  currentHostname === "192.168.1.2"
+    ? `http://${currentHostname === "192.168.1.2" ? currentHostname : "localhost"}:5000`
+    : "https://libapi.vercel.app";
 let renderedCardCount = 0;
 let filterOptionsRequestId = 0;
+
+const responseCache = new Map();
+const CACHE_TTL = 10 * 60 * 1000;
+
+async function cachedFetch(url) {
+  const cached = responseCache.get(url);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.response.clone();
+  }
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const clone = response.clone();
+      responseCache.set(url, { response: clone, timestamp: Date.now() });
+    }
+    return response;
+  } catch (err) {
+    if (cached) {
+      return cached.response.clone();
+    }
+    throw err;
+  }
+}
+
+function preloadImages(urls) {
+  urls.forEach((url) => {
+    const img = new Image();
+    img.src = url;
+  });
+}
 const storedLanguage =
   typeof localStorage !== "undefined"
     ? localStorage.getItem("musclelib-language")
@@ -31,13 +71,14 @@ const uiText = {
     difficultyLabel: "Dificuldade",
     equipmentLabel: "Equipamento",
     categoryLabel: "Categoria",
-    forceLabel: "Forca",
+    forceLabel: "Força",
     allMuscles: "Todos os musculos",
     allSecondaryMuscles: "Todos os secundarios",
     allDifficulties: "Todas as dificuldades",
     allEquipment: "Todos os equipamentos",
     allCategories: "Todas as categorias",
-    allForces: "Todas as forcas",
+    allForces: "Todas as forças",
+    filterToggle: "Filtros",
     clearFilters: "Limpar filtros",
     loadingMore: "Carregando mais exercicios...",
     loadingOptions: "Carregando filtros...",
@@ -45,12 +86,13 @@ const uiText = {
     activeFilters: "Filtros ativos",
     level: "Nivel",
     category: "Categoria",
-    force: "Forca",
+    force: "Força",
     equipment: "Equipamento",
     primaryMuscles: "Musculo principal",
     secondaryMuscles: "Musculos secundarios",
     none: "Nenhum",
     showInstructions: "Mostrar instrucoes",
+    searchOptions: "Buscar opcoes...",
   },
   en: {
     controlsKicker: "Library",
@@ -68,6 +110,7 @@ const uiText = {
     allEquipment: "All equipment",
     allCategories: "All categories",
     allForces: "All forces",
+    filterToggle: "Filters",
     clearFilters: "Clear filters",
     loadingMore: "Loading more exercises...",
     loadingOptions: "Loading filters...",
@@ -81,6 +124,7 @@ const uiText = {
     secondaryMuscles: "Secondary muscles",
     none: "None",
     showInstructions: "Show instructions",
+    searchOptions: "Search options...",
   },
 };
 
@@ -162,6 +206,10 @@ function translateStaticUi() {
     const key = element.getAttribute("data-i18n");
     element.textContent = getText(key);
   });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-placeholder");
+    element.placeholder = getText(key);
+  });
   updateLoadingText();
   updateFilterStatus();
 }
@@ -206,6 +254,10 @@ function populateFilterSelect(field, values) {
 
   select.value = values.includes(selectedValue) ? selectedValue : "";
   activeFilters[field] = select.value;
+
+  if (typeof CustomSelect !== "undefined") {
+    CustomSelect.refreshByFilter(field);
+  }
 }
 
 function clearFilterOptions() {
@@ -225,6 +277,10 @@ function clearFilterOptions() {
     select.value = "";
     activeFilters[field] = "";
   });
+
+  if (typeof CustomSelect !== "undefined") {
+    CustomSelect.refreshAll();
+  }
 }
 
 async function loadFilterOptions() {
@@ -240,7 +296,7 @@ async function loadFilterOptions() {
     const params = {
       lang: language,
     };
-    const response = await fetch(
+    const response = await cachedFetch(
       `${apiBaseUrl}/api/exercises/filters?${buildQueryString(params)}`,
     );
 
@@ -267,15 +323,20 @@ async function loadFilterOptions() {
 }
 
 async function fetchExercises(page = 0, limit = exercisesPerPage) {
+    if (loading || !hasMoreExercises) {
+        return;
+    }
+
     try {
         loading = true;
-        const response = await fetch(buildExerciseUrl(page, limit));
+        const response = await cachedFetch(buildExerciseUrl(page, limit));
 
         if (response.status === 404) {
           if (page === 0) {
             showEmptyState();
           }
 
+          hasMoreExercises = false;
           loading = false;
           return;
         }
@@ -289,8 +350,12 @@ async function fetchExercises(page = 0, limit = exercisesPerPage) {
         if (exercises.length > 0) {
           displayExercises(exercises);
           currentPage++;
+          hasMoreExercises = exercises.length === limit;
         } else if (page === 0) {
           showEmptyState();
+          hasMoreExercises = false;
+        } else {
+          hasMoreExercises = false;
         }
 
         loading = false;
@@ -371,30 +436,36 @@ function displayExercises(exercises) {
         exerciseCard.className = 'exercise-card';
 
         if (exercise.images && exercise.images.length > 0) {
-            const img = document.createElement('img');
-            const primaryImage = `${apiBaseUrl}/exercises/${exercise.images[0]}`;
-            const secondaryImage = exercise.images[1] ? `${apiBaseUrl}/exercises/${exercise.images[1]}` : null;
+            const imageUrls = exercise.images.map(i => `${apiBaseUrl}/exercises/${i}`);
+            let currentImageIndex = 0;
 
-            img.src = primaryImage;
+            const imgWrapper = document.createElement('div');
+            imgWrapper.className = 'exercise-img-wrapper';
+
+            const img = document.createElement('img');
+            img.src = imageUrls[0];
             img.alt = normalizeLocalizedValue(exercise.name);
             img.loading = 'lazy';
             img.decoding = 'async';
-            exerciseCard.appendChild(img);
+            img.style.cursor = 'pointer';
+            imgWrapper.appendChild(img);
 
-            if (secondaryImage) {
-                const showSecondaryImage = () => {
-                    img.src = secondaryImage;
-                };
+            if (imageUrls.length > 1) {
+                const toggleIcon = document.createElement('i');
+                toggleIcon.className = 'fas fa-sync-alt exercise-img-toggle';
+                toggleIcon.setAttribute('aria-hidden', 'true');
+                imgWrapper.appendChild(toggleIcon);
 
-                const showPrimaryImage = () => {
-                    img.src = primaryImage;
-                };
+                preloadImages(imageUrls.slice(1));
 
-                exerciseCard.addEventListener('mouseenter', showSecondaryImage);
-                exerciseCard.addEventListener('mouseleave', showPrimaryImage);
-                exerciseCard.addEventListener('focusin', showSecondaryImage);
-                exerciseCard.addEventListener('focusout', showPrimaryImage);
+                img.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentImageIndex = (currentImageIndex + 1) % imageUrls.length;
+                    img.src = imageUrls[currentImageIndex];
+                });
             }
+
+            exerciseCard.appendChild(imgWrapper);
         }
 
         const name = document.createElement('h3');
@@ -432,7 +503,7 @@ function displayExercises(exercises) {
         exerciseCard.appendChild(collapseButton);
 
         const collapseDiv = document.createElement('div');
-        collapseDiv.className = 'collapse';
+        collapseDiv.className = 'collapse exercise-instructions';
         collapseDiv.id = collapseId;
 
         const instructions = document.createElement('div');
@@ -449,14 +520,17 @@ function displayExercises(exercises) {
         collapseDiv.appendChild(instructions);
         exerciseCard.appendChild(collapseDiv);
 
-        collapseButton.addEventListener('click', () => {
-            const icon = collapseButton.querySelector('.collapse-icon');
+        collapseDiv.addEventListener('show.bs.collapse', () => {
+            document.querySelectorAll('.exercise-instructions.show').forEach((openCollapse) => {
+                if (openCollapse === collapseDiv) {
+                    return;
+                }
 
-            if (collapseDiv.classList.contains('show')) {
-                icon.classList.replace('fa-minus', 'fa-plus');
-            } else {
-                icon.classList.replace('fa-plus', 'fa-minus');
-            }
+                const bootstrapCollapse = bootstrap.Collapse.getOrCreateInstance(openCollapse, {
+                    toggle: false,
+                });
+                bootstrapCollapse.hide();
+            });
         });
 
         collapseDiv.addEventListener('shown.bs.collapse', () => {
@@ -478,6 +552,7 @@ function displayExercises(exercises) {
 
 function reloadExercises() {
   isShowingSearchResults = false;
+  hasMoreExercises = true;
   resetExercisesContainer();
   currentPage = 0;
   fetchExercises(0);
@@ -493,6 +568,22 @@ function initFilterControls() {
   languageSelect.value = currentLanguage;
   translateStaticUi();
   loadFilterOptions();
+
+  const filterToggle = document.getElementById("toggle-filters");
+  const filterOptions = document.getElementById("filter-options");
+  const filterPanel = document.getElementById("filter-panel");
+
+  if (filterToggle && filterOptions) {
+    filterToggle.addEventListener("click", () => {
+      const shouldOpen = filterOptions.hidden;
+      filterOptions.hidden = !shouldOpen;
+      if (filterPanel) {
+        filterPanel.hidden = !shouldOpen;
+      }
+      filterToggle.setAttribute("aria-expanded", String(shouldOpen));
+      filterToggle.classList.toggle("is-open", shouldOpen);
+    });
+  }
 
   languageSelect.addEventListener("change", () => {
     currentLanguage = languageSelect.value;
@@ -528,6 +619,9 @@ function initFilterControls() {
           select.value = "";
         }
       });
+      if (typeof CustomSelect !== "undefined") {
+        CustomSelect.refreshAll();
+      }
       updateFilterStatus();
       reloadExercises();
     });
@@ -535,7 +629,7 @@ function initFilterControls() {
 }
 
 window.addEventListener('scroll', () => {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 && !loading && !isShowingSearchResults) {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 && !loading && hasMoreExercises && !isShowingSearchResults) {
         fetchExercises(currentPage);
     }
 });
